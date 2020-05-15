@@ -427,12 +427,11 @@ class Grammar extends BaseGrammar
      */
     protected function whereNested(Builder $query, $where)
     {
-        // Here we will calculate what portion of the string we need to remove. If this
-        // is a join clause query, we need to remove the "on" portion of the SQL and
-        // if it is a normal query we need to take the leading "where" of queries.
-        $offset = $query instanceof JoinClause ? 3 : 6;
+        // We need to remove the conjunction as compileWheres prepend
+        // the conjunction following by a space then remove all before the first space.
+        $sql = strstr($this->compileWheres($where['query']), ' ');
 
-        return '('.substr($this->compileWheres($where['query']), $offset).')';
+        return '('.ltrim($sql, ' ').')';
     }
 
     /**

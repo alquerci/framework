@@ -433,6 +433,44 @@ class DatabaseEloquentSoftDeletesIntegrationTest extends TestCase
         $this->assertCount(0, $users);
     }
 
+    public function testAutoJoinWithDeletedRelationship()
+    {
+        $this->createUsers();
+
+        $abigail = SoftDeletesTestUser::where('email', 'abigailotwell@gmail.com')->first();
+        $post = $abigail->posts()->create(['title' => 'First Title']);
+
+        $users = SoftDeletesTestUser::where('email', 'taylorotwell@gmail.com')->autoJoin('posts')->get();
+        $this->assertCount(0, $users);
+
+        $users = SoftDeletesTestUser::where('email', 'abigailotwell@gmail.com')->autoJoin('posts')->get();
+        $this->assertCount(1, $users);
+
+        $users = SoftDeletesTestUser::where('email', 'doesnt@exist.com')->orHas('posts')->get();
+        $this->assertCount(1, $users);
+
+        $users = SoftDeletesTestUser::autoJoin('posts', function ($query) {
+            $query->where('title', 'First Title');
+        })->get();
+        $this->assertCount(1, $users);
+
+        $users = SoftDeletesTestUser::autoJoin('posts', function ($query) {
+            $query->where('title', 'Another Title');
+        })->get();
+        $this->assertCount(0, $users);
+
+        $users = SoftDeletesTestUser::where('email', 'doesnt@exist.com')->orWhereHas('posts', function ($query) {
+            $query->where('title', 'First Title');
+        })->get();
+        $this->assertCount(1, $users);
+
+        // With Post Deleted...
+
+        $post->delete();
+        $users = SoftDeletesTestUser::autoJoin('posts')->get();
+        $this->assertCount(0, $users);
+    }
+
     public function testWhereHasWithNestedDeletedRelationshipAndOnlyTrashedCondition()
     {
         $this->createUsers();
@@ -455,6 +493,28 @@ class DatabaseEloquentSoftDeletesIntegrationTest extends TestCase
         $this->assertCount(1, $users);
     }
 
+    public function testAutoJoinWithNestedDeletedRelationshipAndOnlyTrashedCondition()
+    {
+        $this->createUsers();
+
+        $abigail = SoftDeletesTestUser::where('email', 'abigailotwell@gmail.com')->first();
+        $post = $abigail->posts()->create(['title' => 'First Title']);
+        $post->delete();
+
+        $users = SoftDeletesTestUser::autoJoin('posts')->get();
+        $this->assertCount(0, $users);
+
+        $users = SoftDeletesTestUser::autoJoin('posts', function ($q) {
+            $q->onlyTrashed();
+        })->get();
+        $this->assertCount(1, $users);
+
+        $users = SoftDeletesTestUser::autoJoin('posts', function ($q) {
+            $q->withTrashed();
+        })->get();
+        $this->assertCount(1, $users);
+    }
+
     public function testWhereHasWithNestedDeletedRelationship()
     {
         $this->createUsers();
@@ -471,6 +531,22 @@ class DatabaseEloquentSoftDeletesIntegrationTest extends TestCase
         $this->assertCount(1, $users);
     }
 
+    public function testAutoJoinWithNestedDeletedRelationship()
+    {
+        $this->createUsers();
+
+        $abigail = SoftDeletesTestUser::where('email', 'abigailotwell@gmail.com')->first();
+        $post = $abigail->posts()->create(['title' => 'First Title']);
+        $comment = $post->comments()->create(['body' => 'Comment Body']);
+        $comment->delete();
+
+        $users = SoftDeletesTestUser::autoJoin('posts.comments')->get();
+        $this->assertCount(0, $users);
+
+        $users = SoftDeletesTestUser::doesntHave('posts.comments')->get();
+        $this->assertCount(1, $users);
+    }
+
     public function testWhereHasWithNestedDeletedRelationshipAndWithTrashedCondition()
     {
         $this->createUsers();
@@ -480,6 +556,18 @@ class DatabaseEloquentSoftDeletesIntegrationTest extends TestCase
         $post->delete();
 
         $users = SoftDeletesTestUserWithTrashedPosts::has('posts')->get();
+        $this->assertCount(1, $users);
+    }
+
+    public function testAutoJoinWithNestedDeletedRelationshipAndWithTrashedCondition()
+    {
+        $this->createUsers();
+
+        $abigail = SoftDeletesTestUserWithTrashedPosts::where('email', 'abigailotwell@gmail.com')->first();
+        $post = $abigail->posts()->create(['title' => 'First Title']);
+        $post->delete();
+
+        $users = SoftDeletesTestUserWithTrashedPosts::autoJoin('posts')->get();
         $this->assertCount(1, $users);
     }
 

@@ -725,6 +725,23 @@ class DatabaseEloquentBuilderTest extends TestCase
         $this->assertEquals(['baz', 'qux', 'quuux'], $builder->getBindings());
     }
 
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported having constraint on autoJoin constraint as callback.
+     */
+    public function testAutoJoinWithConstraintsAndHavingInSubquery()
+    {
+        $model = new EloquentBuilderTestModelParentStub;
+
+        $builder = $model->where('bar', 'baz');
+        $builder->autoJoin('foo', function ($q) {
+            $q->having('bam', '>', 'qux');
+        })->where('quux', 'quuux');
+
+        $this->assertEquals('select * from "eloquent_builder_test_model_parent_stubs" where "bar" = ? and exists (select * from "eloquent_builder_test_model_close_related_stubs" where "eloquent_builder_test_model_parent_stubs"."foo_id" = "eloquent_builder_test_model_close_related_stubs"."id" having "bam" > ?) and "quux" = ?', $builder->toSql());
+        $this->assertEquals(['baz', 'qux', 'quuux'], $builder->getBindings());
+    }
+
     public function testHasWithConstraintsWithOrWhereAndHavingInSubquery()
     {
         $model = new EloquentBuilderTestModelParentStub;
@@ -740,11 +757,49 @@ class DatabaseEloquentBuilderTest extends TestCase
         $this->assertEquals(['larry', '90210', '90220', 'fooside dr', 29], $builder->getBindings());
     }
 
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported having constraint on autoJoin constraint as callback.
+     */
+    public function testAutoJoinWithConstraintsWithOrWhereAndHavingInSubquery()
+    {
+        $model = new EloquentBuilderTestModelParentStub;
+
+        $builder = $model->where('name', 'larry');
+        $builder->autoJoin('address', function ($q) {
+            $q->where('zipcode', '90210');
+            $q->orWhere('zipcode', '90220');
+            $q->having('street', '=', 'fooside dr');
+        })->where('age', 29);
+
+        $this->assertEquals('select * from "eloquent_builder_test_model_parent_stubs" where "name" = ? and exists (select * from "eloquent_builder_test_model_close_related_stubs" where "eloquent_builder_test_model_parent_stubs"."foo_id" = "eloquent_builder_test_model_close_related_stubs"."id" and ("zipcode" = ? or "zipcode" = ?) having "street" = ?) and "age" = ?', $builder->toSql());
+        $this->assertEquals(['larry', '90210', '90220', 'fooside dr', 29], $builder->getBindings());
+    }
+
     public function testHasWithContraintsAndJoinAndHavingInSubquery()
     {
         $model = new EloquentBuilderTestModelParentStub;
         $builder = $model->where('bar', 'baz');
         $builder->whereHas('foo', function ($q) {
+            $q->join('quuuux', function ($j) {
+                $j->where('quuuuux', '=', 'quuuuuux');
+            });
+            $q->having('bam', '>', 'qux');
+        })->where('quux', 'quuux');
+
+        $this->assertEquals('select * from "eloquent_builder_test_model_parent_stubs" where "bar" = ? and exists (select * from "eloquent_builder_test_model_close_related_stubs" inner join "quuuux" on "quuuuux" = ? where "eloquent_builder_test_model_parent_stubs"."foo_id" = "eloquent_builder_test_model_close_related_stubs"."id" having "bam" > ?) and "quux" = ?', $builder->toSql());
+        $this->assertEquals(['baz', 'quuuuuux', 'qux', 'quuux'], $builder->getBindings());
+    }
+
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin nested on constraint as callback.
+     */
+    public function testAutoJoinWithContraintsAndJoinAndHavingInSubquery()
+    {
+        $model = new EloquentBuilderTestModelParentStub;
+        $builder = $model->where('bar', 'baz');
+        $builder->autoJoin('foo', function ($q) {
             $q->join('quuuux', function ($j) {
                 $j->where('quuuuux', '=', 'quuuuuux');
             });
@@ -785,6 +840,21 @@ class DatabaseEloquentBuilderTest extends TestCase
         $this->assertEquals($builder, $result);
     }
 
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin nested on constraint as callback.
+     */
+    public function testAutoJoinNestedWithConstraints()
+    {
+        $model = new EloquentBuilderTestModelParentStub;
+
+        $builder = $model->autoJoin('foo', function ($q) {
+            $q->autoJoin('bar', function ($q) {
+                $q->where('baz', 'bam');
+            });
+        });
+    }
+
     public function testHasNested()
     {
         $model = new EloquentBuilderTestModelParentStub;
@@ -796,6 +866,19 @@ class DatabaseEloquentBuilderTest extends TestCase
         $result = $model->has('foo.bar')->toSql();
 
         $this->assertEquals($builder->toSql(), $result);
+    }
+
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin nested on constraint as callback.
+     */
+    public function testAutoJoinNested()
+    {
+        $model = new EloquentBuilderTestModelParentStub;
+
+        $builder = $model->autoJoin('foo', function ($q) {
+            $q->autoJoin('bar');
+        });
     }
 
     public function testOrHasNested()
@@ -833,11 +916,43 @@ class DatabaseEloquentBuilderTest extends TestCase
         $this->assertEquals($nestedSql, $dotSql);
     }
 
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin nested on constraint as callback.
+     */
+    public function testSelfAutoJoinNested()
+    {
+        $model = new EloquentBuilderTestModelSelfRelatedStub;
+
+        $nestedSql = $model->autoJoin('parentFoo', function ($q) {
+            $q->autoJoin('childFoo');
+        });
+    }
+
     public function testSelfHasNestedUsesAlias()
     {
         $model = new EloquentBuilderTestModelSelfRelatedStub;
 
         $sql = $model->has('parentFoo.childFoo')->toSql();
+
+        // alias has a dynamic hash, so replace with a static string for comparison
+        $alias = 'self_alias_hash';
+        $aliasRegex = '/\b(laravel_reserved_\d)(\b|$)/i';
+
+        $sql = preg_replace($aliasRegex, $alias, $sql);
+
+        $this->assertContains('"self_alias_hash"."id" = "self_related_stubs"."parent_id"', $sql);
+    }
+
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin on nested self referencing.
+     */
+    public function testSelfAutoJoinNestedUsesAlias()
+    {
+        $model = new EloquentBuilderTestModelSelfRelatedStub;
+
+        $sql = $model->autoJoin('parentFoo.childFoo')->toSql();
 
         // alias has a dynamic hash, so replace with a static string for comparison
         $alias = 'self_alias_hash';
