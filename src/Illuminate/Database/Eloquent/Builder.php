@@ -18,6 +18,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 class Builder
 {
     use BuildsQueries, Concerns\QueriesRelationships;
+    use Concerns\AutoJoinRelationships;
 
     /**
      * The base query builder instance.

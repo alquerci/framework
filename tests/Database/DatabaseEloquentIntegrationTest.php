@@ -514,6 +514,19 @@ class DatabaseEloquentIntegrationTest extends TestCase
         $this->assertEquals('taylorotwell@gmail.com', $results->first()->email);
     }
 
+    public function testAutoJoinOnSelfReferencingBelongsToManyRelationship()
+    {
+        $user = EloquentTestUser::create(['email' => 'taylorotwell@gmail.com']);
+        $friend = $user->friends()->create(['email' => 'abigailotwell@gmail.com']);
+
+        $results = EloquentTestUser::autoJoin('friends', function ($query) {
+            $query->where($query->qualifyColumn('email'), 'abigailotwell@gmail.com');
+        })->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('taylorotwell@gmail.com', $results->first()->email);
+    }
+
     public function testHasOnNestedSelfReferencingBelongsToManyRelationship()
     {
         $user = EloquentTestUser::create(['email' => 'taylorotwell@gmail.com']);
@@ -540,12 +553,41 @@ class DatabaseEloquentIntegrationTest extends TestCase
         $this->assertEquals('taylorotwell@gmail.com', $results->first()->email);
     }
 
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin on nested self referencing.
+     */
+    public function testAutoJoinOnNestedSelfReferencingBelongsToManyRelationship()
+    {
+        $user = EloquentTestUser::create(['email' => 'taylorotwell@gmail.com']);
+        $friend = $user->friends()->create(['email' => 'abigailotwell@gmail.com']);
+        $nestedFriend = $friend->friends()->create(['email' => 'foo@gmail.com']);
+
+        $results = EloquentTestUser::autoJoin('friends.friends', function ($query) {
+            $query->where('email', 'foo@gmail.com');
+        })->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('taylorotwell@gmail.com', $results->first()->email);
+    }
+
     public function testHasOnSelfReferencingBelongsToManyRelationshipWithWherePivot()
     {
         $user = EloquentTestUser::create(['email' => 'taylorotwell@gmail.com']);
         $friend = $user->friends()->create(['email' => 'abigailotwell@gmail.com']);
 
         $results = EloquentTestUser::has('friendsOne')->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('taylorotwell@gmail.com', $results->first()->email);
+    }
+
+    public function testAutoJoinOnSelfReferencingBelongsToManyRelationshipWithWherePivot()
+    {
+        $user = EloquentTestUser::create(['email' => 'taylorotwell@gmail.com']);
+        $friend = $user->friends()->create(['email' => 'abigailotwell@gmail.com']);
+
+        $results = EloquentTestUser::autoJoin('friendsOne')->get();
 
         $this->assertCount(1, $results);
         $this->assertEquals('taylorotwell@gmail.com', $results->first()->email);
@@ -563,12 +605,39 @@ class DatabaseEloquentIntegrationTest extends TestCase
         $this->assertEquals('taylorotwell@gmail.com', $results->first()->email);
     }
 
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin on nested self referencing.
+     */
+    public function testAutoJoinOnNestedSelfReferencingBelongsToManyRelationshipWithWherePivot()
+    {
+        $user = EloquentTestUser::create(['email' => 'taylorotwell@gmail.com']);
+        $friend = $user->friends()->create(['email' => 'abigailotwell@gmail.com']);
+        $nestedFriend = $friend->friends()->create(['email' => 'foo@gmail.com']);
+
+        $results = EloquentTestUser::autoJoin('friendsOne.friendsTwo')->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('taylorotwell@gmail.com', $results->first()->email);
+    }
+
     public function testHasOnSelfReferencingBelongsToRelationship()
     {
         $parentPost = EloquentTestPost::create(['name' => 'Parent Post', 'user_id' => 1]);
         $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 2]);
 
         $results = EloquentTestPost::has('parentPost')->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('Child Post', $results->first()->name);
+    }
+
+    public function testAutoJoinOnSelfReferencingBelongsToRelationship()
+    {
+        $parentPost = EloquentTestPost::create(['name' => 'Parent Post', 'user_id' => 1]);
+        $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 2]);
+
+        $results = EloquentTestPost::autoJoin('parentPost')->get();
 
         $this->assertCount(1, $results);
         $this->assertEquals('Child Post', $results->first()->name);
@@ -596,6 +665,19 @@ class DatabaseEloquentIntegrationTest extends TestCase
         $this->assertEquals('Child Post', $results->first()->name);
     }
 
+    public function testAutoJoinWithConstraintOnSelfReferencingBelongsToRelationship()
+    {
+        $parentPost = EloquentTestPost::create(['name' => 'Parent Post', 'user_id' => 1]);
+        $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 2]);
+
+        $results = EloquentTestPost::autoJoin('parentPost', function ($query) {
+            $query->where($query->qualifyColumn('name'), 'Parent Post');
+        })->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('Child Post', $results->first()->name);
+    }
+
     public function testHasOnNestedSelfReferencingBelongsToRelationship()
     {
         $grandParentPost = EloquentTestPost::create(['name' => 'Grandparent Post', 'user_id' => 1]);
@@ -603,6 +685,22 @@ class DatabaseEloquentIntegrationTest extends TestCase
         $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 3]);
 
         $results = EloquentTestPost::has('parentPost.parentPost')->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('Child Post', $results->first()->name);
+    }
+
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin on nested self referencing.
+     */
+    public function testAutoJoinOnNestedSelfReferencingBelongsToRelationship()
+    {
+        $grandParentPost = EloquentTestPost::create(['name' => 'Grandparent Post', 'user_id' => 1]);
+        $parentPost = EloquentTestPost::create(['name' => 'Parent Post', 'parent_id' => $grandParentPost->id, 'user_id' => 2]);
+        $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 3]);
+
+        $results = EloquentTestPost::autoJoin('parentPost.parentPost')->get();
 
         $this->assertCount(1, $results);
         $this->assertEquals('Child Post', $results->first()->name);
@@ -622,12 +720,41 @@ class DatabaseEloquentIntegrationTest extends TestCase
         $this->assertEquals('Child Post', $results->first()->name);
     }
 
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin on nested self referencing.
+     */
+    public function testAutoJoinWithConstraintOnNestedSelfReferencingBelongsToRelationship()
+    {
+        $grandParentPost = EloquentTestPost::create(['name' => 'Grandparent Post', 'user_id' => 1]);
+        $parentPost = EloquentTestPost::create(['name' => 'Parent Post', 'parent_id' => $grandParentPost->id, 'user_id' => 2]);
+        $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 3]);
+
+        $results = EloquentTestPost::autoJoin('parentPost.parentPost', function ($query) {
+            $query->where($query->qualifyColumn('name'), 'Grandparent Post');
+        })->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('Child Post', $results->first()->name);
+    }
+
     public function testHasOnSelfReferencingHasManyRelationship()
     {
         $parentPost = EloquentTestPost::create(['name' => 'Parent Post', 'user_id' => 1]);
         $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 2]);
 
         $results = EloquentTestPost::has('childPosts')->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('Parent Post', $results->first()->name);
+    }
+
+    public function testAutoJoinOnSelfReferencingHasManyRelationship()
+    {
+        $parentPost = EloquentTestPost::create(['name' => 'Parent Post', 'user_id' => 1]);
+        $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 2]);
+
+        $results = EloquentTestPost::autoJoin('childPosts')->get();
 
         $this->assertCount(1, $results);
         $this->assertEquals('Parent Post', $results->first()->name);
@@ -646,6 +773,19 @@ class DatabaseEloquentIntegrationTest extends TestCase
         $this->assertEquals('Parent Post', $results->first()->name);
     }
 
+    public function testAutoJoinWithConstraintOnSelfReferencingHasManyRelationship()
+    {
+        $parentPost = EloquentTestPost::create(['name' => 'Parent Post', 'user_id' => 1]);
+        $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 2]);
+
+        $results = EloquentTestPost::autoJoin('childPosts', function ($query) {
+            $query->where($query->qualifyColumn('name'), 'Child Post');
+        })->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('Parent Post', $results->first()->name);
+    }
+
     public function testHasOnNestedSelfReferencingHasManyRelationship()
     {
         $grandParentPost = EloquentTestPost::create(['name' => 'Grandparent Post', 'user_id' => 1]);
@@ -653,6 +793,22 @@ class DatabaseEloquentIntegrationTest extends TestCase
         $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 3]);
 
         $results = EloquentTestPost::has('childPosts.childPosts')->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('Grandparent Post', $results->first()->name);
+    }
+
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin on nested self referencing.
+     */
+    public function testAutoJoinOnNestedSelfReferencingHasManyRelationship()
+    {
+        $grandParentPost = EloquentTestPost::create(['name' => 'Grandparent Post', 'user_id' => 1]);
+        $parentPost = EloquentTestPost::create(['name' => 'Parent Post', 'parent_id' => $grandParentPost->id, 'user_id' => 2]);
+        $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 3]);
+
+        $results = EloquentTestPost::autoJoin('childPosts.childPosts')->get();
 
         $this->assertCount(1, $results);
         $this->assertEquals('Grandparent Post', $results->first()->name);
@@ -672,6 +828,24 @@ class DatabaseEloquentIntegrationTest extends TestCase
         $this->assertEquals('Grandparent Post', $results->first()->name);
     }
 
+    /**
+     * @expectedException \LogicException
+     * @expectedExceptionMessage Unsupported autoJoin on nested self referencing.
+     */
+    public function testAutoJoinWithConstraintOnNestedSelfReferencingHasManyRelationship()
+    {
+        $grandParentPost = EloquentTestPost::create(['name' => 'Grandparent Post', 'user_id' => 1]);
+        $parentPost = EloquentTestPost::create(['name' => 'Parent Post', 'parent_id' => $grandParentPost->id, 'user_id' => 2]);
+        $childPost = EloquentTestPost::create(['name' => 'Child Post', 'parent_id' => $parentPost->id, 'user_id' => 3]);
+
+        $results = EloquentTestPost::autoJoin('childPosts.childPosts', function ($query) {
+            $query->where($query->qualifyColumn('name'), 'Child Post');
+        })->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('Grandparent Post', $results->first()->name);
+    }
+
     public function testHasWithNonWhereBindings()
     {
         $user = EloquentTestUser::create(['id' => 1, 'email' => 'taylorotwell@gmail.com']);
@@ -680,6 +854,21 @@ class DatabaseEloquentIntegrationTest extends TestCase
              ->photos()->create(['name' => 'photo.jpg']);
 
         $query = EloquentTestUser::has('postWithPhotos');
+
+        $bindingsCount = count($query->getBindings());
+        $questionMarksCount = substr_count($query->toSql(), '?');
+
+        $this->assertEquals($questionMarksCount, $bindingsCount);
+    }
+
+    public function testAutoJoinWithNonWhereBindings()
+    {
+        $user = EloquentTestUser::create(['id' => 1, 'email' => 'taylorotwell@gmail.com']);
+
+        $user->posts()->create(['name' => 'Post 2'])
+             ->photos()->create(['name' => 'photo.jpg']);
+
+        $query = EloquentTestUser::autoJoin('postWithPhotos');
 
         $bindingsCount = count($query->getBindings());
         $questionMarksCount = substr_count($query->toSql(), '?');

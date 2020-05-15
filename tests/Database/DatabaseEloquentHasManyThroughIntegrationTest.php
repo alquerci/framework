@@ -119,6 +119,25 @@ class DatabaseEloquentHasManyThroughIntegrationTest extends TestCase
         $this->assertCount(1, $country);
     }
 
+    public function testAutoJoinOnARelationWithCustomIntermediateAndLocalKey()
+    {
+        $this->seedData();
+        $country = HasManyThroughIntermediateTestCountry::autoJoin('posts', function ($query) {
+            $query->where('title', 'A title');
+        })->get();
+
+        $this->assertCount(1, $country);
+    }
+
+    public function testAutoJoinOnARelationWithCustomIntermediateAndLocalKeyNoDuplicate()
+    {
+        $this->seedData();
+
+        $country = HasManyThroughIntermediateTestCountry::autoJoin('posts')->get();
+
+        $this->assertCount(1, $country);
+    }
+
     /**
      * @expectedException \Illuminate\Database\Eloquent\ModelNotFoundException
      * @expectedExceptionMessage No query results for model [Illuminate\Tests\Database\HasManyThroughTestPost].
